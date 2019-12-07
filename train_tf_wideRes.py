@@ -1,3 +1,4 @@
+from main_cifar10 import *
 import tensorflow as tf
 import numpy as np
 import os
@@ -13,6 +14,7 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import json
 from tqdm import tqdm
+from data_generator import get_test_adv_loader
 
 import pdb
 
@@ -47,7 +49,7 @@ def cifar(dataset='cifar10'):
 def attack(threshold):
     '''
     :param threshold:
-    :return: attack_succ_file | model | transform towards data
+    :return: model |
     '''
     resnet101 = models.resnet101(pretrained=True).eval()
     if torch.cuda.is_available():
@@ -124,6 +126,21 @@ def main():
     parser.add_argument('--lr_mode', default=0, type=int)
     parser.add_argument('--test_interval', default=1000, type=int)
     parser.add_argument('--save_model', default='res_cifar10', type=str)
+
+    # attack
+    parser.add_argument("--attack_method",default="PGD",choices=["PGD,","FGSM","Momentum","STA"])
+    parser.add_argument("--epsilon",type=float,default=8/255)
+
+    #dataset
+    parser.add_argument('--dataset', default='cifar10', type=str, help='dataset = [cifar10/MNIST]')
+
+    #net
+    parser.add_argument('--net_type', default='wide-resnet', type=str, help='model')
+    parser.add_argument('--depth', default=28, type=int, help='depth of model')
+    parser.add_argument('--widen_factor', default=10, type=int, help='width of model')
+    parser.add_argument('--dropout', default=0.3, type=float, help='dropout_rate')
+    parser.add_argument('--num_classes', default=10, type=int)
+
     args = parser.parse_args()
 
     if args.test_mode == 0:
@@ -159,7 +176,14 @@ def main():
     print('test mode: {}; model name: {}'.format(args.test_mode, args.save_model))
 
     x_train, _ = cifar(args.train_dataset)
-    succ_att, fmodel, transformer = attack(args.Linfinity)
+    transformer = transforms.Compose([transforms.ToTensor()])
+    #加载网络
+    print('| Resuming from checkpoint...')
+    assert os.path.isdir('checkpoint'), 'Error: No checkpoint directory found!'
+    _, file_name = getNetwork(args)
+    checkpoint = torch.load('./checkpoint/' + args.dataset + os.sep + file_name + '.t7')  # os.sep提供跨平台的分隔符
+    fmodel = checkpoint['net']
+    fmodel = fmodel.cuda()
 
     # Batch read attack images
     print("Preparing attack images batch.")
@@ -167,15 +191,15 @@ def main():
     true_label_list = []
     name_list = []
 
-    for file_name, true_label, adv_label, adv_image in succ_att:
-        adv_image = np.array([adv_image])
-        if attack_total is None:
-            attack_total = adv_image
-        else:
-            attack_total = np.concatenate((attack_total, adv_image), axis=0)
-
-        name_list.append(file_name)
-        true_label_list.append(true_label)
+    # for file_name, true_label, adv_label, adv_image in succ_att:
+    #     adv_image = np.array([adv_image])
+    #     if attack_total is None:
+    #         attack_total = adv_image
+    #     else:
+    #         attack_total = np.concatenate((attack_total, adv_image), axis=0)
+    #
+    #     name_list.append(file_name)
+    #     true_label_list.append(true_label)
 
     data = tf.placeholder(tf.float32, shape=[None] + [None,None,3], name = 'data')
     is_training = tf.placeholder(tf.bool, name='is_training')
@@ -248,6 +272,8 @@ def main():
         np.random.shuffle(x_train)
         length = len(x_train)
         global_cnt = 0
+        test_adv_dataloader = get_test_adv_loader(args.attack_method,args.epsilon)
+
         for epoch in range(args.n_epoch):
             for i in range(0, length, args.batch_size):
                 global_cnt += 1
@@ -268,27 +294,25 @@ def main():
                 if global_cnt % args.test_interval == 0:
                     succ_num = 0
                     # batch read attack images
-                    for j in range(0, attack_total.shape[0]):
-                        attack_img = attack_total[j][np.newaxis, ...]
-                        true_label = true_label_list[j]
+                    for batch_idx,(adv_data,true_target) in test_adv_dataloader:
+                        adv_data,true_label = adv_data.cuda(),true_label.cuda()
 
                         feed_dict = {
-                            placeholders['data']: attack_img,
+                            placeholders['data']: adv_data,
                             placeholders['is_training']: False,
                             placeholders['global_steps']: global_cnt,
                         }
 
                         bct, img_clean, bc, rec_bc = sess.run([binary_code_test, y_test, binary_code, y], feed_dict=feed_dict)
 
-                        # cv2.imwrite('clean_images/' + name_list[j], img_clean[0, :, :, :] * 255) # (224, 224, 3)
-
-                        img_clean = transformer(img_clean[0]).numpy()  # (3, 224, 224), float
-                        label_clean_pred = np.argmax(fmodel.predictions(img_clean))
-
-                        if true_label == label_clean_pred:
-                            succ_num = succ_num + 1
-
-                    succ_rate = succ_num / attack_total.shape[0]
+                        img_clean = transformer(img_clean[0]).numpy()  # (3, 224, 224), float | tensor
+                        print(img_clean.size())
+                        with torch.no_grad():
+                            output = model(img_clean.float())
+                        pred = output.max(1, keepdim=True)[1]
+                        clncorrect_nodefence += pred.eq(
+                            true_target.view_as(pred)).sum().item()  # item： to get the value of tensor
+                    succ_rate = clncorrect_nodefence / len(test_adv_dataloader.dataset)
                     print('Accuracy is %.3f after defending' % (succ_rate))
                     with open('./logs/' + args.save_model + '@' + time_stamp + '.txt' , 'a+') as f:
                         f.write('epoch: % d global_cnt: % d succ_num: %d succ_rate: %f \n' % (epoch, global_cnt, succ_num, succ_rate))
