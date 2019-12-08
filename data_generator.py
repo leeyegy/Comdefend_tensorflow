@@ -146,6 +146,7 @@ def _get_test_adv(attack_method,epsilon):
     test_adv = []
     test_true_target = []
     for clndata, target in test_loader:
+        print("clndata:{}".format(clndata.size()))
         clndata, target = clndata.to(device), target.to(device)
         with ctx_noparamgrad_and_eval(model):
             advdata = adversary.perturb(clndata, target)
@@ -155,6 +156,7 @@ def _get_test_adv(attack_method,epsilon):
     test_true_target = np.reshape(np.asarray(test_true_target),[-1])
     print("test_adv.shape:{}".format(test_adv.shape))
     print("test_true_target.shape:{}".format(test_true_target.shape))
+    del model
 
     return test_adv, test_true_target
 
@@ -169,7 +171,7 @@ def get_test_adv_loader(attack_method,epsilon):
 
         test_data,test_true_target = _get_test_adv(attack_method,epsilon)
         h5_store = h5py.File("data/test_adv_"+str(attack_method)+"_"+str(epsilon)+".h5", 'w')
-        h5_store.create_dataset('data' ,data= test_adv)
+        h5_store.create_dataset('data' ,data= test_data)
         h5_store.create_dataset('true_target',data=test_true_target)
         h5_store.close()
 
@@ -178,8 +180,8 @@ def get_test_adv_loader(attack_method,epsilon):
     train_target = torch.from_numpy(test_true_target)  # numpy转Tensor
     train_dataset = CIFAR10Dataset(train_data, train_target)
     del train_data,train_target
-    return DataLoader(dataset=train_dataset, num_workers=num_workers, drop_last=True, batch_size=batch_size,
-                  shuffle=shuffle)
+    return DataLoader(dataset=train_dataset, num_workers=2, drop_last=True, batch_size=50,
+                  shuffle=False)
 
 #generate h5file for test data regarding specific attack
 def generate_attackh5(save_dir="data",attack_method="PGD",epsilon=8/255):

@@ -175,8 +175,13 @@ def main():
         args.save_model = '3_3'
     print('test mode: {}; model name: {}'.format(args.test_mode, args.save_model))
 
+
     x_train, _ = cifar(args.train_dataset)
     transformer = transforms.Compose([transforms.ToTensor()])
+
+    # load data
+    test_adv_dataloader = get_test_adv_loader(args.attack_method, args.epsilon)
+
     #加载网络
     print('| Resuming from checkpoint...')
     assert os.path.isdir('checkpoint'), 'Error: No checkpoint directory found!'
@@ -187,19 +192,7 @@ def main():
 
     # Batch read attack images
     print("Preparing attack images batch.")
-    attack_total = None
-    true_label_list = []
-    name_list = []
 
-    # for file_name, true_label, adv_label, adv_image in succ_att:
-    #     adv_image = np.array([adv_image])
-    #     if attack_total is None:
-    #         attack_total = adv_image
-    #     else:
-    #         attack_total = np.concatenate((attack_total, adv_image), axis=0)
-    #
-    #     name_list.append(file_name)
-    #     true_label_list.append(true_label)
 
     data = tf.placeholder(tf.float32, shape=[None] + [None,None,3], name = 'data')
     is_training = tf.placeholder(tf.bool, name='is_training')
@@ -272,7 +265,6 @@ def main():
         np.random.shuffle(x_train)
         length = len(x_train)
         global_cnt = 0
-        test_adv_dataloader = get_test_adv_loader(args.attack_method,args.epsilon)
 
         for epoch in range(args.n_epoch):
             for i in range(0, length, args.batch_size):
@@ -294,8 +286,8 @@ def main():
                 if global_cnt % args.test_interval == 0:
                     succ_num = 0
                     # batch read attack images
-                    for batch_idx,(adv_data,true_target) in test_adv_dataloader:
-                        adv_data,true_label = adv_data.cuda(),true_label.cuda()
+                    for batch_idx,(adv_data,true_target) in enumerate(test_adv_dataloader):
+                        # adv_data,true_label = adv_data.cuda(),true_label.cuda()
 
                         feed_dict = {
                             placeholders['data']: adv_data,
@@ -307,8 +299,21 @@ def main():
 
                         img_clean = transformer(img_clean[0]).numpy()  # (3, 224, 224), float | tensor
                         print(img_clean.size())
-                        with torch.no_grad():
-                            output = model(img_clean.float())
+                        img_clean = torch.from_numpy(img_clean).cuda()
+
+                        # get output
+                        try:
+                            with torch.no_grad():
+                                output = model(img_clean.float())
+                        except RuntimeError as exception:
+                            if "out of memory" in str(exception):
+                                print("WARNING: OOM")
+                                if hasattr(torch.cuda,'empty_cache'):
+                                    torch.cuda.empty_cache()
+                            else:
+                                raise exception
+
+                        # calculate acc
                         pred = output.max(1, keepdim=True)[1]
                         clncorrect_nodefence += pred.eq(
                             true_target.view_as(pred)).sum().item()  # item： to get the value of tensor
