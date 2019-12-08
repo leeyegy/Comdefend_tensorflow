@@ -288,6 +288,8 @@ def main():
                     # batch read attack images
                     for batch_idx,(adv_data,true_target) in enumerate(test_adv_dataloader):
                         # adv_data,true_label = adv_data.cuda(),true_label.cuda()
+                        # adv_data transpose
+                        adv_data = torch.transpose(adv_data,[0,2,3,1])
 
                         feed_dict = {
                             placeholders['data']: adv_data,
