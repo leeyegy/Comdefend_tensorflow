@@ -108,6 +108,18 @@ def attack(threshold):
             f.write(json.dumps(succ_att, cls=NumpyEncoder)) # 将succ_att保存为json文件
 
     return succ_att, fmodel, transformer
+def img2numpy(img,transformer):
+    '''
+    :param img: img(may be PIL IMAGE) | batch_list
+    :return: np.array | [batch,C,H,W]
+    '''
+    res = []
+    for i in range(img.shape[0]):
+        res.append(transformer(img[i]).numpy())
+    res = np.asarray(res)
+    print("res.shape:{}".format(res.shape))
+    res = np.reshape(res,[-1,3,32,32])
+    return res
 
 def main():
     start_time = time.time()
@@ -289,7 +301,7 @@ def main():
                     for batch_idx,(adv_data,true_target) in enumerate(test_adv_dataloader):
                         # adv_data,true_label = adv_data.cuda(),true_label.cuda()
                         # adv_data transpose
-                        adv_data = torch.transpose(adv_data,[0,2,3,1])
+                        adv_data = np.transpose(adv_data.cpu().numpy(),[0,2,3,1]) # (50,3,32,32) -> (50,32,32,3)
 
                         feed_dict = {
                             placeholders['data']: adv_data,
@@ -299,19 +311,24 @@ def main():
 
                         bct, img_clean, bc, rec_bc = sess.run([binary_code_test, y_test, binary_code, y], feed_dict=feed_dict)
 
-                        img_clean = transformer(img_clean[0]).numpy()  # (3, 224, 224), float | tensor
-                        print(img_clean.size())
+
+                        # print("original img_clean.shape:{}".format(img_clean.shape))
+                        # img_clean = transformer(img_clean).numpy()  # (50, 3, 32, 32), float | tensor
+                        # print("img_clean.shape:{}".format(img_clean.shape))
+                        img_clean = img2numpy(img_clean,transformer)
                         img_clean = torch.from_numpy(img_clean).cuda()
 
                         # get output
                         try:
                             with torch.no_grad():
-                                output = model(img_clean.float())
+                                output = fmodel(img_clean.float())
                         except RuntimeError as exception:
                             if "out of memory" in str(exception):
                                 print("WARNING: OOM")
                                 if hasattr(torch.cuda,'empty_cache'):
                                     torch.cuda.empty_cache()
+                                with torch.no_grad():
+                                    output = fmodel(img_clean.float())
                             else:
                                 raise exception
 
