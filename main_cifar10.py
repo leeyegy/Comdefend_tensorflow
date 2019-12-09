@@ -39,10 +39,8 @@ import numpy as np
 import matplotlib
 import  time
 
-# matplotlib.use('AGG')  # 或者PDF, SVG或PS
 from PIL import Image
 import matplotlib.pyplot as plt
-#加载数据集
 from torchvision.datasets import CIFAR10
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
@@ -57,7 +55,6 @@ from networks import  *
 # from utils_net.net.networks import *
 
 
-# 修改多线程的tensor方式为file_system（默认方式为file_descriptor，受限于open files数量）
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # def show(x, title=None, cbar=False, figsize=None):
@@ -155,7 +152,6 @@ class sum_squared_error(_Loss):  # PyTorch 0.4.1
     """
     Definition: sum_squared_error = 1/2 * nn.MSELoss(reduction = 'sum')
     The backward is defined as: input-target
-    这里实现的代码其实只是比torch.nn.MSELoss多了个0.5的系数
     """
     def __init__(self, size_average=None, reduce=None, reduction='sum'):
         super(sum_squared_error, self).__init__(size_average, reduce, reduction)
@@ -234,11 +230,10 @@ if __name__ == '__main__':
     else:
         raise
 
-    #测试包装的loader
     train_loader = get_handled_cifar10_train_loader(num_workers=4,shuffle=True,batch_size=args.train_batch_size)
     test_loader = get_handled_cifar10_test_loader(num_workers=4,shuffle=False,batch_size=args.train_batch_size)
 
-    #加载网络模型
+    #load net
     # model = ResNet18()
     if not args.resume:
         model, _ = getNetwork(args)
@@ -248,7 +243,7 @@ if __name__ == '__main__':
         print('| Resuming from checkpoint...')
         assert os.path.isdir('checkpoint'), 'Error: No checkpoint directory found!'
         _, file_name = getNetwork(args)
-        checkpoint = torch.load('./checkpoint/'+args.dataset+os.sep+file_name+'.t7') # os.sep提供跨平台的分隔符
+        checkpoint = torch.load('./checkpoint/'+args.dataset+os.sep+file_name+'.t7') #
         model = checkpoint['net']
         nb_epoch = 10
         # best_acc = checkpoint['acc']
@@ -258,7 +253,7 @@ if __name__ == '__main__':
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 
-    # 加载去噪网络
+    # load denoiser
     model_DnCNN = DnCNN(image_channels=3)
     if  os.path.exists(os.path.join(args.model_dir, args.model_name)):
 
@@ -269,7 +264,7 @@ if __name__ == '__main__':
     else:
         print('no pre-trained model')
 
-    #定义对抗攻击类型：C&W
+    #define attack
     if flag_advtrain:
         from advertorch.attacks import LinfPGDAttack
         if args.attack_method == "PGD":
@@ -280,7 +275,7 @@ if __name__ == '__main__':
         elif args.attack_method == "FGSM":
             adversary =GradientSignAttack(
                 model,loss_fn=nn.CrossEntropyLoss(reduction="sum"),
-                clip_min=0.0, clip_max=1.0,eps=0.007,targeted=False) #先测试一下不含扰动范围限制的，FGSM的eps代表的是一般的eps_iter
+                clip_min=0.0, clip_max=1.0,eps=0.007,targeted=False)
         # elif args.attack_method == "JSMA":
         #     adversary =JacobianSaliencyMapAttack(
         #         model,num_classes=args.num_classes,
@@ -294,7 +289,7 @@ if __name__ == '__main__':
             adversary =SpatialTransformAttack(
                 model,num_classes=args.num_classes, loss_fn=nn.CrossEntropyLoss(reduction="sum"),
                 initial_const=0.05, max_iterations=1000, search_steps=1, confidence=0, clip_min=0.0, clip_max=1.0,
-                targeted=False,abort_early=True )#先测试一下不含扰动范围限制的
+                targeted=False,abort_early=True )
 
 
 
@@ -306,7 +301,7 @@ if __name__ == '__main__':
         #     abort_early=True,initial_const = 0.001,clip_min=0.0,clip_max=255.0,
         #     loss_fn=nn.CrossEntropyLoss(reduction="sum"))
 
-    # 进行数据的处理
+
     print ("pd_block:{}, while gaussian_block:{}".format(args.pd_block,args.gaussian_block))
 
     for epoch in range(nb_epoch):
@@ -320,7 +315,7 @@ if __name__ == '__main__':
             optimizer.zero_grad()
             output = model(data)
             loss = F.cross_entropy(
-                output, target, reduction='elementwise_mean') # 定义损失函数
+                output, target, reduction='elementwise_mean')
             loss.backward()
             optimizer.step()
             if batch_idx % args.log_interval == 0:
@@ -354,7 +349,7 @@ if __name__ == '__main__':
                 output, target, reduction='sum').item()
 
             pred = output.max(1, keepdim=True)[1]
-            clncorrect_nodefence += pred.eq(target.view_as(pred)).sum().item()  # item： to get the value of tensor
+            clncorrect_nodefence += pred.eq(target.view_as(pred)).sum().item()
 
 
             # clean data with defence
@@ -367,10 +362,9 @@ if __name__ == '__main__':
                 output, target, reduction='sum').item()
 
             pred = output.max(1, keepdim=True)[1]
-            clncorrect += pred.eq(target.view_as(pred)).sum().item()  # item： to get the value of tensor
+            clncorrect += pred.eq(target.view_as(pred)).sum().item()
 
             if flag_advtrain:
-                # 先进行对抗扰动
                 with ctx_noparamgrad_and_eval(model):
                     advdata = adversary.perturb(clndata, target)
 
@@ -387,9 +381,7 @@ if __name__ == '__main__':
 
                 # # gaussian_block
                 if args.gaussian_block:
-                    # 加入高斯噪声 - 再加高斯噪声
                     noise_data =  add_gaussian_nosie(advdata, args.sigma)
-                    # DnCNN进行去噪
                     advdata = model_DnCNN(noise_data)
 
                 with torch.no_grad():
@@ -425,7 +417,7 @@ if __name__ == '__main__':
             for i in range(list(clndata.shape)[0]):
                 # [3,32,32] -> [32,32,3]
                 tmp = np.hstack((clndata[i].cpu().numpy(), advdata[i].cpu().numpy(), noise_data[i].cpu().numpy(),denoised_data[
-                    i].detach().cpu().numpy()))  # 如果输入是float类型，使用imsave进行保存，需要数值在-1到1之间，否则报错；如果是int类型的0-255，则无需进行除以255，可以直接保存
+                    i].detach().cpu().numpy()))
                 # print (tmp.shape)
                 tmp = np.transpose(tmp, [1, 2, 0])
                 save_result(tmp, path=os.path.join(args.result_dir, "CIFAR10",

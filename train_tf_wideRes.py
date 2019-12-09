@@ -74,7 +74,7 @@ def attack(threshold):
         with tqdm(total=len(os.listdir(raw_data_path))) as pbar:
             for file_name in os.listdir(raw_data_path):
                 ind = int(file_name.split('_')[-1].split('.')[0]) - 1
-                true_label = int(labels[ind]) # 得到对应图片的lable
+                true_label = int(labels[ind])
 
                 raw_img_path = os.path.join(raw_data_path, file_name)
                 raw_img = cv2.imread(raw_img_path) # (None, None, 3), int
@@ -82,30 +82,29 @@ def attack(threshold):
                 img = transformer(img).numpy() # (3, 224, 224), float
                 pre_label= np.argmax(fmodel.predictions(img))
 
-                if true_label != pre_label: # 如果预测本来就是错的，不加以攻击
+                if true_label != pre_label:
                     continue
 
-                adv_image = attack(img, true_label) # (3, 224, 224), float # 否则进行攻击
+                adv_image = attack(img, true_label)
                 if adv_image is None:
                     continue
 
-                diff = adv_image - img # 得到噪声扰动
-                diff = np.clip(diff, -threshold, threshold) # Linfinity # 进行噪声的epsilon限制
-                adv_image = img + diff # (3, 224, 224), float #得到最终得到对抗样本
-                adv_label = np.argmax(fmodel.predictions(adv_image)) # 得到对抗样本的预测类别
+                diff = adv_image - img
+                diff = np.clip(diff, -threshold, threshold) # Linfinity
+                adv_image = img + diff # (3, 224, 224), float
+                adv_label = np.argmax(fmodel.predictions(adv_image))
                 adv_image = np.transpose(adv_image, (1, 2, 0)) # (224, 224, 3), float
 
-                if true_label == adv_label: # 如果攻击不成功，跳过之后的步骤
+                if true_label == adv_label:
                     continue
 
-                # 对于攻击成功的情况，分别保存好原始文件名、 真实label、对抗label、对抗样本
                 succ_att.append([file_name, int(true_label), int(adv_label), adv_image])
                 # print('%s, label: %d, predicted class: %d, adversarial class: %d' % tuple(succ_att[-1][:4]))
                 pbar.update(1)
-        print('New generate attack images, num of attack images: {}'.format(len(succ_att)))#输出需要进行对抗攻击、而且对抗攻击成功的样本的数量
+        print('New generate attack images, num of attack images: {}'.format(len(succ_att)))
 
         with open('./attack.json', 'w') as f:
-            f.write(json.dumps(succ_att, cls=NumpyEncoder)) # 将succ_att保存为json文件
+            f.write(json.dumps(succ_att, cls=NumpyEncoder))
 
     return succ_att, fmodel, transformer
 def img2numpy(img,transformer):
@@ -140,7 +139,7 @@ def main():
     parser.add_argument('--save_model', default='res_cifar10', type=str)
 
     # attack
-    parser.add_argument("--attack_method",default="PGD",choices=["PGD,","FGSM","Momentum","STA"])
+    parser.add_argument("--attack_method",default="PGD",choices=["PGD","FGSM","Momentum","STA"])
     parser.add_argument("--epsilon",type=float,default=8/255)
 
     #dataset
@@ -194,11 +193,11 @@ def main():
     # load data
     test_adv_dataloader = get_test_adv_loader(args.attack_method, args.epsilon)
 
-    #加载网络
+    # load network
     print('| Resuming from checkpoint...')
     assert os.path.isdir('checkpoint'), 'Error: No checkpoint directory found!'
     _, file_name = getNetwork(args)
-    checkpoint = torch.load('./checkpoint/' + args.dataset + os.sep + file_name + '.t7')  # os.sep提供跨平台的分隔符
+    checkpoint = torch.load('./checkpoint/' + args.dataset + os.sep + file_name + '.t7')
     fmodel = checkpoint['net']
     fmodel = fmodel.cuda()
 
@@ -297,6 +296,7 @@ def main():
                 # test
                 if global_cnt % args.test_interval == 0:
                     succ_num = 0
+                    clncorrect_nodefence = 0
                     # batch read attack images
                     for batch_idx,(adv_data,true_target) in enumerate(test_adv_dataloader):
                         # adv_data,true_label = adv_data.cuda(),true_label.cuda()
@@ -335,11 +335,12 @@ def main():
                         # calculate acc
                         pred = output.max(1, keepdim=True)[1]
                         clncorrect_nodefence += pred.eq(
-                            true_target.view_as(pred)).sum().item()  # item： to get the value of tensor
+                            true_target.view_as(pred).cuda()).sum().item()
+                    print("attack success:{} while the len of test dataset:{}".format(clncorrect_nodefence,len(test_adv_dataloader.dataset)))
                     succ_rate = clncorrect_nodefence / len(test_adv_dataloader.dataset)
                     print('Accuracy is %.3f after defending' % (succ_rate))
                     with open('./logs/' + args.save_model + '@' + time_stamp + '.txt' , 'a+') as f:
-                        f.write('epoch: % d global_cnt: % d succ_num: %d succ_rate: %f \n' % (epoch, global_cnt, succ_num, succ_rate))
+                        f.write('epoch: % d global_cnt: % d succ_num: %d succ_rate: %f attack_method: %s epsilon: %f\n' % (epoch, global_cnt, succ_num, succ_rate,args.attack_method,args.epsilon))
 
             save_path = saver.save(sess, os.path.join(save_model_dir, 'epoch-{}'.format(epoch)), global_step=global_cnt)
             print("Model saved in path: %s" % save_path)

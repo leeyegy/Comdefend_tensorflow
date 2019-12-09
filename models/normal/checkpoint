@@ -1,0 +1,4 @@
+model_checkpoint_path: "epoch-2-7500"
+all_model_checkpoint_paths: "epoch-0-2500"
+all_model_checkpoint_paths: "epoch-1-5000"
+all_model_checkpoint_paths: "epoch-2-7500"
