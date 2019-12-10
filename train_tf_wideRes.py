@@ -14,7 +14,7 @@ import torchvision.models as models
 import torchvision.transforms as transforms
 import json
 from tqdm import tqdm
-from data_generator import get_test_adv_loader
+from data_generator import get_test_adv_loader,get_handled_cifar10_test_loader
 
 import pdb
 
@@ -127,7 +127,7 @@ def main():
     parser.add_argument('--test_mode', default=0, type=int, choices=list(range(10)))
     # parser.add_argument('--model', default='res', type=str)
     parser.add_argument('--train_dataset', default='cifar10', type=str)
-    parser.add_argument('--n_epoch', default=3, type=int)
+    parser.add_argument('--n_epoch', default=30, type=int)
     parser.add_argument('--batch_size', default=20, type=int)
     parser.add_argument('--test_batch_size', default=10, type=int)
     parser.add_argument('--lambd', default=0.0001, type=float)
@@ -192,6 +192,8 @@ def main():
 
     # load data
     test_adv_dataloader = get_test_adv_loader(args.attack_method, args.epsilon)
+    # test_adv_dataloader = get_handled_cifar10_test_loader(batch_size=50, num_workers=2, shuffle=False)
+
 
     # load network
     print('| Resuming from checkpoint...')

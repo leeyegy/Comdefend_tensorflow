@@ -1,0 +1,7 @@
+epoch:  0 global_cnt:  1000 succ_num: 0 succ_rate: 0.131900 attack_method: PGD epsilon: 0.062750
+epoch:  0 global_cnt:  2000 succ_num: 0 succ_rate: 0.084800 attack_method: PGD epsilon: 0.062750
+epoch:  1 global_cnt:  3000 succ_num: 0 succ_rate: 0.144600 attack_method: PGD epsilon: 0.062750
+epoch:  1 global_cnt:  4000 succ_num: 0 succ_rate: 0.125300 attack_method: PGD epsilon: 0.062750
+epoch:  1 global_cnt:  5000 succ_num: 0 succ_rate: 0.105800 attack_method: PGD epsilon: 0.062750
+epoch:  2 global_cnt:  6000 succ_num: 0 succ_rate: 0.090900 attack_method: PGD epsilon: 0.062750
+epoch:  2 global_cnt:  7000 succ_num: 0 succ_rate: 0.100200 attack_method: PGD epsilon: 0.062750

@@ -1,0 +1,7 @@
+epoch:  0 global_cnt:  1000 succ_num: 0 succ_rate: 0.184000 attack_method: FGSM epsilon: 0.031370
+epoch:  0 global_cnt:  2000 succ_num: 0 succ_rate: 0.187500 attack_method: FGSM epsilon: 0.031370
+epoch:  1 global_cnt:  3000 succ_num: 0 succ_rate: 0.100000 attack_method: FGSM epsilon: 0.031370
+epoch:  1 global_cnt:  4000 succ_num: 0 succ_rate: 0.100000 attack_method: FGSM epsilon: 0.031370
+epoch:  1 global_cnt:  5000 succ_num: 0 succ_rate: 0.100000 attack_method: FGSM epsilon: 0.031370
+epoch:  2 global_cnt:  6000 succ_num: 0 succ_rate: 0.100000 attack_method: FGSM epsilon: 0.031370
+epoch:  2 global_cnt:  7000 succ_num: 0 succ_rate: 0.100000 attack_method: FGSM epsilon: 0.031370

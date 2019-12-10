@@ -150,7 +150,7 @@ def _get_test_adv(attack_method,epsilon):
         clndata, target = clndata.to(device), target.to(device)
         with ctx_noparamgrad_and_eval(model):
             advdata = adversary.perturb(clndata, target)
-            test_adv.append(advdata.cpu().numpy())
+            test_adv.append(advdata.detach().cpu().numpy())
         test_true_target.append(target.cpu().numpy())
     test_adv = np.reshape(np.asarray(test_adv),[-1,3,32,32])
     test_true_target = np.reshape(np.asarray(test_true_target),[-1])
